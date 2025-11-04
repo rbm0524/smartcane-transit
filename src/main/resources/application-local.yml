@@ -1,0 +1,30 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: transit-service
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/smartcane_transit?useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
+    username: smartcane
+    password: smartcane123!
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none          # 운영에선 Flyway만 사용
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc.time_zone: Asia/Seoul
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  security:
+    user:
+      name: admin
+      password: Smartcane1!
+
+logging:
+  level:
+    org.flywaydb: DEBUG

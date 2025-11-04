@@ -1,0 +1,7 @@
+server:
+  port: 8084
+
+sk:
+  transit:
+    base-url: https://apis.openapi.sk.com/transit/routes/ # 실제 엔드포인트 넣기
+    api-key: ${TRANSIT_API_KEY:change-me}    # 환경변수/시크릿로 대체 권장
