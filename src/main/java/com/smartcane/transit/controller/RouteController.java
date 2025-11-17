@@ -23,18 +23,36 @@ public class RouteController {
     private final RouteProgressService progressService;
     private final TripStore tripStore; // 상태 조회용 (InMemoryTripStore → 이후 Redis 교체)
 
+
     /**
      * POST /api/transit/plan
-     * - 경로 생성: SK API 호출 결과(MetaData) + 서버 발급 tripId 반환
+     *
+     * SK 길찾기 호출 + 서버 tripId 발급.
+     *
+     * - RouteService.searchRoutes()
+     *   → SK 응답(itineraries) 중
+     *      1순위: 버스 위주(pathType = 2)
+     *      2순위: 지하철+버스(pathType = 3)
+     *      로 필터링된 SkTransitRootDto 를 반환
+     *
+     * - 여기서는 그 중 MetaData만 iOS에게 내려주고,
+     *   서버 측에는 tripId 기준으로 진행 상태(phase 등)를 TripStore에 초기화.
      */
     @PostMapping(value = "/plan", produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<RoutePlanInitResponse> plan(@RequestBody RoutePlanRequest query) {
-        String tripId = UUID.randomUUID().toString(); // 서버 발급(임시). 필요시 RouteService에서 발급해도 무방.
-        return routeService.searchRoutes(query)
-                .map(tr -> {
-                    // 초기 상태(0,0,0,"WALKING")로 저장(선택)
+        String tripId = UUID.randomUUID().toString(); // 서버 발급 tripId
+
+        return routeService.searchRoutes(query)      // Mono<SkTransitRootDto>
+                .map((SkTransitRootDto root) -> {
+                    // ✅ 이 시점의 root.metaData().plan().itineraries() 는
+                    //    이미 "버스 우선 → 지하철+버스" 로 필터된 상태
+                    SkTransitRootDto.MetaDataDto meta = root.metaData();
+
+                    // 초기 Trip 상태 등록 (보행 시작 기준)
                     tripStore.init(tripId, 0, 0, 0, "WALKING");
-                    return new RoutePlanInitResponse(tripId, tr.metaData());
+
+                    // iOS 에게는 tripId + MetaData 만 내려줌
+                    return new RoutePlanInitResponse(tripId, meta);
                 });
     }
 
@@ -104,48 +122,48 @@ public class RouteController {
      * 기존: POST /routes
      * 지금은 /api/transit/plan으로 대체됨. 필요시 하위호환 유지.
      */
-    @PostMapping(value = "/_legacy/plan", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Mono<TransitResponse> getRoutesLegacy(@RequestBody RoutePlanRequest query) {
-        return routeService.searchRoutes(query);
-    }
+//    @PostMapping(value = "/_legacy/plan", produces = MediaType.APPLICATION_JSON_VALUE)
+//    public Mono<TransitResponse> getRoutesLegacy(@RequestBody RoutePlanRequest query) {
+//        return routeService.searchRoutes(query);
+//    }
 
     /**
      * 기존: 도착 체크(보행)
      * 지금은 내부적으로 progress 로직에 통합되는 방향 권장.
      * 하위호환 필요 없으면 제거해도 됨.
      */
-    @PostMapping("/_legacy/arrival/walk")
-    public ResponseEntity<ArrivalCheckResponse> checkWalkArrivalLegacy(
-            @RequestBody MetaData body,
-            @RequestParam double currLat,
-            @RequestParam double currLon,
-            @RequestParam(defaultValue = "0") int itineraryIndex,
-            @RequestParam int legIndex,
-            @RequestParam(required = false) Integer stepIndex,
-            @RequestParam(defaultValue = "12") double arriveRadiusM,
-            @RequestParam(required = false) Double lookAheadM
-    ) {
-        var req = new ArrivalCheckRequest(currLat, currLon, itineraryIndex, legIndex, stepIndex, arriveRadiusM, lookAheadM);
-        var itin = body.plan().itineraries().get(itineraryIndex);
-        var res = progressService.checkWalkStep(itin, req);
-        return ResponseEntity.ok(res);
-    }
+//    @PostMapping("/_legacy/arrival/walk")
+//    public ResponseEntity<ArrivalCheckResponse> checkWalkArrivalLegacy(
+//            @RequestBody MetaData body,
+//            @RequestParam double currLat,
+//            @RequestParam double currLon,
+//            @RequestParam(defaultValue = "0") int itineraryIndex,
+//            @RequestParam int legIndex,
+//            @RequestParam(required = false) Integer stepIndex,
+//            @RequestParam(defaultValue = "12") double arriveRadiusM,
+//            @RequestParam(required = false) Double lookAheadM
+//    ) {
+//        var req = new ArrivalCheckRequest(currLat, currLon, itineraryIndex, legIndex, stepIndex, arriveRadiusM, lookAheadM);
+//        var itin = body.plan().itineraries().get(itineraryIndex);
+//        var res = progressService.checkWalkStep(itin, req);
+//        return ResponseEntity.ok(res);
+//    }
 
     /**
      * 기존: 도착 체크(대중교통)
      */
-    @PostMapping("/_legacy/arrival/transit")
-    public ResponseEntity<ArrivalCheckResponse> checkTransitArrivalLegacy(
-            @RequestBody MetaData body,
-            @RequestParam double currLat,
-            @RequestParam double currLon,
-            @RequestParam(defaultValue = "0") int itineraryIndex,
-            @RequestParam int legIndex,
-            @RequestParam(defaultValue = "20") double arriveRadiusM
-    ) {
-        var req = new ArrivalCheckRequest(currLat, currLon, itineraryIndex, legIndex, null, arriveRadiusM, null);
-        var itin = body.plan().itineraries().get(itineraryIndex);
-        var res = progressService.checkTransitLeg(itin, req);
-        return ResponseEntity.ok(res);
-    }
+//    @PostMapping("/_legacy/arrival/transit")
+//    public ResponseEntity<ArrivalCheckResponse> checkTransitArrivalLegacy(
+//            @RequestBody MetaData body,
+//            @RequestParam double currLat,
+//            @RequestParam double currLon,
+//            @RequestParam(defaultValue = "0") int itineraryIndex,
+//            @RequestParam int legIndex,
+//            @RequestParam(defaultValue = "20") double arriveRadiusM
+//    ) {
+//        var req = new ArrivalCheckRequest(currLat, currLon, itineraryIndex, legIndex, null, arriveRadiusM, null);
+//        var itin = body.plan().itineraries().get(itineraryIndex);
+//        var res = progressService.checkTransitLeg(itin, req);
+//        return ResponseEntity.ok(res);
+//    }
 }

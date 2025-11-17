@@ -1,8 +1,8 @@
 package com.smartcane.transit.dto.request;
 
-import com.smartcane.transit.dto.response.MetaData;
+import com.smartcane.transit.dto.response.SkTransitRootDto;
 
 public record ProgressUpdateEnvelope(
-        MetaData metaData,
+        SkTransitRootDto.MetaDataDto metaData,
         ProgressUpdateRequest progress
 ) {}

@@ -6,5 +6,5 @@ package com.smartcane.transit.dto.response;
  */
 public record RoutePlanInitResponse(
         String tripId,
-        MetaData metaData
+        SkTransitRootDto.MetaDataDto metaData
 ) {}

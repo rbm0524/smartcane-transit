@@ -24,7 +24,7 @@ public class TransitArrivalService {
     }
 
 
-    public ArrivalCheckResponse evaluate(Itinerary itin, ArrivalCheckRequest req) {
+    public ArrivalCheckResponse evaluate(SkTransitRootDto.ItineraryDto itin, ArrivalCheckRequest req) {
         var leg = safeGet(itin.legs(), req.legIndex());
         if (leg == null) return notFound();
 

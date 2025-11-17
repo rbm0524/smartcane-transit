@@ -24,7 +24,7 @@ public class WalkArrivalService {
         return new ArrivalCheckResponse(false, Double.NaN, "경로를 찾을 수 없습니다.", null, 0, null);
     }
 
-    public ArrivalCheckResponse evaluate(Itinerary itin, ArrivalCheckRequest req) {
+    public ArrivalCheckResponse evaluate(SkTransitRootDto.ItineraryDto itin, ArrivalCheckRequest req) {
         var leg = safeGet(itin.legs(), req.legIndex());
         if (leg == null) return notFound();
 
