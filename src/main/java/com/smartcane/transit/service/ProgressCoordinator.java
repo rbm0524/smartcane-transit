@@ -4,7 +4,9 @@ import com.smartcane.transit.config.GuidanceProperties;
 import com.smartcane.transit.dto.request.ArrivalCheckRequest;
 import com.smartcane.transit.dto.request.ProgressUpdateEnvelope;
 import com.smartcane.transit.dto.request.ProgressUpdateRequest;
-import com.smartcane.transit.dto.response.*;
+import com.smartcane.transit.dto.response.ArrivalCheckResponse;
+import com.smartcane.transit.dto.response.GuidanceResponse;
+import com.smartcane.transit.dto.response.SkTransitRootDto;
 import com.smartcane.transit.service.arrival.TransitArrivalService;
 import com.smartcane.transit.service.arrival.WalkArrivalService;
 import lombok.RequiredArgsConstructor;
@@ -24,30 +26,26 @@ public class ProgressCoordinator {
     private final GuidanceTextGenerator guidanceTextGenerator;
     private final WalkArrivalService walkArrivalService;
     private final TransitArrivalService transitArrivalService;
-
-    private final GuidanceProperties props; // ✅ 주입
+    private final GuidanceProperties props;
 
     /** 보행 구간 판정(테스트/디버깅용 공개) */
-
     public ArrivalCheckResponse checkWalkStep(SkTransitRootDto.ItineraryDto itin,
                                               ArrivalCheckRequest req) {
         return walkArrivalService.evaluate(itin, req);
     }
 
     /** 대중교통 구간 판정(테스트/디버깅용 공개) */
-
     public ArrivalCheckResponse checkTransitLeg(SkTransitRootDto.ItineraryDto itin,
                                                 ArrivalCheckRequest req) {
         return transitArrivalService.evaluate(itin, req);
     }
-
 
     // 중앙값 계산 유틸
     private static double median(java.util.Deque<Double> dq) {
         if (dq.isEmpty()) return Double.NaN;
         var arr = dq.stream().mapToDouble(Double::doubleValue).sorted().toArray();
         int n = arr.length;
-        return (n % 2 == 1) ? arr[n/2] : (arr[n/2-1] + arr[n/2]) / 2.0;
+        return (n % 2 == 1) ? arr[n / 2] : (arr[n / 2 - 1] + arr[n / 2]) / 2.0;
     }
 
     private static void pushWithCap(java.util.Deque<Double> dq, double v, int cap) {
@@ -60,7 +58,7 @@ public class ProgressCoordinator {
      * - Envelope(metaData, progress) 수신 → 상태 로드 → 도착판정 → 상태전이 → TTS → 응답
      */
     public GuidanceResponse updateProgress(String tripId, ProgressUpdateEnvelope envelope) {
-        // ✅ metaData 타입: SkTransitRootDto.MetaDataDto
+        // metaData 타입: SkTransitRootDto.MetaDataDto
         SkTransitRootDto.MetaDataDto meta = envelope.metaData();
         ProgressUpdateRequest p = envelope.progress();
 
@@ -109,15 +107,20 @@ public class ProgressCoordinator {
         Double lookAhead = isWalk ? props.getLookAheadWalkM() : null;
 
         // 클라이언트가 보낸 값 우선
-        if (p.arriveRadiusM() != null) arriveRadius = p.arriveRadiusM();
-        if (isWalk && p.lookAheadM() != null) lookAhead = p.lookAheadM();
+        if (p.arriveRadiusM() != null) {
+            arriveRadius = p.arriveRadiusM();
+        }
+        if (isWalk && p.lookAheadM() != null) {
+            lookAhead = p.lookAheadM();
+        }
 
         // 6) ArrivalCheckRequest 생성 (중앙값 좌표 사용)
-        var areq = new ArrivalCheckRequest(
+        ArrivalCheckRequest areq = new ArrivalCheckRequest(
                 latMed, lonMed,
                 state.getItineraryIndex(), state.getLegIndex(),
                 state.getStepIndex(),
-                arriveRadius, lookAhead
+                arriveRadius,
+                lookAhead
         );
 
         // 7) 도착 판정
@@ -147,7 +150,7 @@ public class ProgressCoordinator {
         // 9) phase 업데이트
         state.setPhase(isWalk ? "WALKING" : "ONBOARD");
 
-        // 최근 업링크 시각/좌표 업데이트
+        // 10) 최근 업링크 시각/좌표 업데이트
         long now = (p.timestampEpochMs() != null) ? p.timestampEpochMs() : System.currentTimeMillis();
         state.setLastLon(p.lon());
         state.setLastLat(p.lat());
@@ -155,7 +158,7 @@ public class ProgressCoordinator {
 
         tripStore.save(tripId, state);
 
-        // 10) 안내 문구 생성 (이미 Sk DTO 기준으로 수정한 GuidanceTextGenerator 사용)
+        // 11) 안내 문구 생성 (Sk DTO 기준 GuidanceTextGenerator)
         String tts = guidanceTextGenerator.from(ares, state, itinerary, currentLeg);
 
         return new GuidanceResponse(
